@@ -33,6 +33,367 @@ def convert_config_to_json(pkl_path, output_path):
     
     print(f"配置已保存到: {output_path}")
 
+def create_config_header(pkl_path, output_path, struct_name="ModelConfig", namespace="Config"):
+    """生成C++配置头文件 - 直接使用C++结构体，无需JSON解析"""
+    with open(pkl_path, 'rb') as f:
+        config = pickle.load(f)
+    
+    # 递归转换bytes为字符串
+    def convert_keys(obj):
+        if isinstance(obj, dict):
+            return {k.decode('utf-8') if isinstance(k, bytes) else k: convert_keys(v) 
+                    for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_keys(item) for item in obj]
+        elif isinstance(obj, bytes):
+            return obj.decode('utf-8')
+        else:
+            return obj
+    
+    config = convert_keys(config)
+    
+    # 转换set为list
+    for key in config:
+        if isinstance(config[key], (set, frozenset)):
+            config[key] = list(config[key])
+    
+    # 生成头文件
+    header_content = f'''#pragma once
+#include <string>
+#include <vector>
+#include <unordered_map>
+#include <cstdint>
+
+namespace {namespace} {{
+
+/**
+ * @brief 模型配置结构体
+ * 从 config_optimized.pkl 自动生成
+ */
+struct {struct_name} {{
+    // ==================== 模型参数 ====================
+    
+    /// 嵌入维度
+    static constexpr int EMBED_DIM = {config.get('embed_dim', 128)};
+    
+    /// 隐藏层维度
+    static constexpr int HIDDEN_DIM = {config.get('hidden_dim', 256)};
+    
+    /// 输出维度（类别数）
+    static constexpr int OUTPUT_DIM = {config.get('output_dim', 2)};
+    
+    /// 注意力头数
+    static constexpr int NUM_HEADS = {config.get('num_heads', 4)};
+    
+    /// 编码器层数
+    static constexpr int NUM_LAYERS = {config.get('num_layers', 3)};
+    
+    /// Dropout比率
+    static constexpr float DROPOUT = {config.get('dropout', 0.1)}f;
+    
+    /// 最大序列长度
+    static constexpr int MAX_SEQ_LEN = {config.get('max_sequence_length', 512)};
+    
+    /// 最大文件名长度
+    static constexpr int MAX_FILENAME_LEN = {config.get('max_filename_length', 128)};
+    
+    // ==================== 词汇表参数 ====================
+    
+    /// 词汇表大小
+    static constexpr int VOCAB_SIZE = {config.get('vocab_size', 20000)};
+    
+    /// 文件名词汇表大小
+    static constexpr int FILENAME_VOCAB_SIZE = {config.get('filename_vocab_size', 20000)};
+    
+    /// 文本词汇表大小
+    static constexpr int TEXT_VOCAB_SIZE = {config.get('text_vocab_size', 20000)};
+    
+    // ==================== 训练参数 ====================
+    
+    /// 批次大小
+    static constexpr int BATCH_SIZE = {config.get('batch_size', 32)};
+    
+    /// 学习率
+    static constexpr float LEARNING_RATE = {config.get('learning_rate', 0.001)}f;
+    
+    /// 训练轮数
+    static constexpr int EPOCHS = {config.get('epochs', 10)};
+    
+    /// 预热步数
+    static constexpr int WARMUP_STEPS = {config.get('warmup_steps', 1000)};
+    
+    // ==================== 类别配置 ====================
+    
+    /// 类别列表
+    static const std::vector<std::string> CATEGORIES;
+    
+    /// 类别数量
+    static constexpr int NUM_CATEGORIES = {len(config.get('categories', []))};
+    
+    // ==================== 其他配置 ====================
+    
+    /// 是否使用预训练
+    static constexpr bool USE_PRETRAINED = {str(config.get('use_pretrained', False)).lower()};
+    
+    /// 模型保存路径
+    static const std::string MODEL_SAVE_PATH;
+    
+    /// 日志目录
+    static const std::string LOG_DIR;
+    
+    /// 设备类型 (cpu/cuda)
+    static const std::string DEVICE;
+    
+    /// 随机种子
+    static constexpr int SEED = {config.get('seed', 42)};
+    
+    /// 是否启用混合精度
+    static constexpr bool USE_AMP = {str(config.get('use_amp', False)).lower()};
+    
+    /// 梯度裁剪阈值
+    static constexpr float GRAD_CLIP = {config.get('grad_clip', 1.0)}f;
+    
+    /// 早停轮数
+    static constexpr int EARLY_STOPPING_PATIENCE = {config.get('early_stopping_patience', 5)};
+    
+    // ==================== 辅助方法 ====================
+    
+    /// 获取配置摘要
+    static std::string summary() {{
+        std::string s = "Model Configuration:\\n";
+        s += "  Embed Dim: " + std::to_string(EMBED_DIM) + "\\n";
+        s += "  Hidden Dim: " + std::to_string(HIDDEN_DIM) + "\\n";
+        s += "  Output Dim: " + std::to_string(OUTPUT_DIM) + "\\n";
+        s += "  Num Heads: " + std::to_string(NUM_HEADS) + "\\n";
+        s += "  Num Layers: " + std::to_string(NUM_LAYERS) + "\\n";
+        s += "  Max Seq Len: " + std::to_string(MAX_SEQ_LEN) + "\\n";
+        s += "  Vocab Size: " + std::to_string(VOCAB_SIZE) + "\\n";
+        s += "  Batch Size: " + std::to_string(BATCH_SIZE) + "\\n";
+        s += "  Learning Rate: " + std::to_string(LEARNING_RATE) + "\\n";
+        s += "  Epochs: " + std::to_string(EPOCHS) + "\\n";
+        s += "  Num Categories: " + std::to_string(NUM_CATEGORIES) + "\\n";
+        return s;
+    }}
+}};
+
+// ==================== 静态成员定义 ====================
+
+const std::vector<std::string> {struct_name}::CATEGORIES = {{
+'''
+    
+    # 添加类别列表
+    categories = config.get('categories', [])
+    for cat in categories:
+        header_content += f'    "{cat}",\n'
+    
+    header_content += f'''}};
+
+const std::string {struct_name}::MODEL_SAVE_PATH = "{config.get('model_save_path', './models/model.pt')}";
+const std::string {struct_name}::LOG_DIR = "{config.get('log_dir', './logs')}";
+const std::string {struct_name}::DEVICE = "{config.get('device', 'cuda')}";
+
+}} // namespace {namespace}
+'''
+    
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(header_content)
+    
+    print(f"C++配置头文件已保存到: {output_path}")
+    return True
+
+
+def create_tokenizer_config_header(json_path, output_path, struct_name, namespace="Tokenizer"):
+    """从tokenizer JSON生成C++头文件 - 包含词汇表大小等关键信息"""
+    with open(json_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    
+    word_index = data.get('word_index', {})
+    vocab_size = len(word_index)
+    
+    # 获取前N个词作为示例（用于生成常量字符串数组）
+    sample_words = list(word_index.keys())[:100]  # 只取前100个作为示例
+    
+    header_content = f'''#pragma once
+#include <string>
+#include <vector>
+#include <unordered_map>
+#include <cstdint>
+
+namespace {namespace} {{
+
+/**
+ * @brief {struct_name} 配置
+ * 从 tokenizer JSON 自动生成
+ */
+struct {struct_name}Config {{
+    /// 词汇表大小
+    static constexpr size_t VOCAB_SIZE = {vocab_size};
+    
+    /// 最大序列长度
+    static constexpr int MAX_SEQUENCE_LENGTH = {data.get('max_sequence_length', 512)};
+    
+    /// 文档数量
+    static constexpr size_t DOCUMENT_COUNT = {data.get('document_count', 0)};
+    
+    /// 最大词数
+    static constexpr int MAX_WORDS = {data.get('max_words', 20000)};
+    
+    /// 是否被截断
+    static constexpr bool IS_TRUNCATED = {str(data.get('is_truncated', True)).lower()};
+    
+    /// 原始词汇表大小（截断前）
+    static constexpr size_t ORIGINAL_VOCAB_SIZE = {data.get('original_vocab_size', vocab_size)};
+    
+    /// 特殊Token
+    static constexpr const char* PAD_TOKEN = "<PAD>";
+    static constexpr const char* UNK_TOKEN = "<UNK>";
+    static constexpr const char* SOS_TOKEN = "<SOS>";
+    static constexpr const char* EOS_TOKEN = "<EOS>";
+    
+    /// 特殊Token ID
+    static constexpr int PAD_ID = 0;
+    static constexpr int UNK_ID = 1;
+    static constexpr int SOS_ID = 2;
+    static constexpr int EOS_ID = 3;
+    
+    /// 获取配置摘要
+    static std::string summary() {{
+        return "Tokenizer Config:\\n"
+               "  Vocab Size: " + std::to_string(VOCAB_SIZE) + "\\n"
+               "  Max Seq Len: " + std::to_string(MAX_SEQUENCE_LENGTH) + "\\n"
+               "  Document Count: " + std::to_string(DOCUMENT_COUNT) + "\\n"
+               "  Truncated: " + std::string(IS_TRUNCATED ? "true" : "false");
+    }}
+}};
+
+// ==================== 便捷函数 ====================
+
+/**
+ * @brief 检查是否为特殊Token
+ */
+inline bool isSpecialToken(const std::string& token) {{
+    return token == "{struct_name}Config::PAD_TOKEN" ||
+           token == "{struct_name}Config::UNK_TOKEN" ||
+           token == "{struct_name}Config::SOS_TOKEN" ||
+           token == "{struct_name}Config::EOS_TOKEN";
+}}
+
+/**
+ * @brief 检查是否为特殊Token ID
+ */
+inline bool isSpecialTokenId(int id) {{
+    return id <= {struct_name}Config::EOS_ID;
+}}
+
+}} // namespace {namespace}
+'''
+    
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(header_content)
+    
+    print(f"Tokenizer配置头文件已保存到: {output_path} (词汇表大小: {vocab_size})")
+    return True
+
+
+def create_categories_header(json_path, output_path, struct_name="Categories", namespace="Categories"):
+    """从categories JSON生成C++头文件"""
+    with open(json_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    
+    categories = data.get('categories', [])
+    num_categories = len(categories)
+    
+    header_content = f'''#pragma once
+#include <string>
+#include <vector>
+#include <unordered_map>
+#include <cstdint>
+
+namespace {namespace} {{
+
+/**
+ * @brief 类别配置
+ * 从 categories.json 自动生成
+ */
+struct {struct_name} {{
+    /// 类别列表
+    static const std::vector<std::string> LIST;
+    
+    /// 类别数量
+    static constexpr int COUNT = {num_categories};
+    
+    /// 类别名称到索引的映射
+    static const std::unordered_map<std::string, int> NAME_TO_ID;
+    
+    /// 索引到类别名称的映射
+    static const std::vector<std::string> ID_TO_NAME;
+    
+    /// 获取类别名称
+    static inline const std::string& getName(int id) {{
+        if (id >= 0 && id < static_cast<int>(ID_TO_NAME.size())) {{
+            return ID_TO_NAME[id];
+        }}
+        static const std::string UNKNOWN = "UNKNOWN";
+        return UNKNOWN;
+    }}
+    
+    /// 获取类别ID
+    static inline int getId(const std::string& name) {{
+        auto it = NAME_TO_ID.find(name);
+        if (it != NAME_TO_ID.end()) {{
+            return it->second;
+        }}
+        return -1;
+    }}
+    
+    /// 检查类别是否存在
+    static inline bool contains(const std::string& name) {{
+        return NAME_TO_ID.find(name) != NAME_TO_ID.end();
+    }}
+    
+    /// 获取配置摘要
+    static std::string summary() {{
+        return "Categories:\\n"
+               "  Count: " + std::to_string(COUNT) + "\\n"
+               "  Names: " + std::to_string(LIST.size()) + " categories";
+    }}
+}};
+
+// ==================== 静态成员定义 ====================
+
+const std::vector<std::string> {struct_name}::LIST = {{
+'''
+    
+    for cat in categories:
+        header_content += f'    "{cat}",\n'
+    
+    header_content += f'''}};
+
+const std::unordered_map<std::string, int> {struct_name}::NAME_TO_ID = {{
+'''
+    
+    for i, cat in enumerate(categories):
+        header_content += f'    {{"{cat}", {i}}},\n'
+    
+    header_content += f'''}};
+
+const std::vector<std::string> {struct_name}::ID_TO_NAME = {{
+'''
+    
+    for cat in categories:
+        header_content += f'    "{cat}",\n'
+    
+    header_content += f'''}};
+
+}} // namespace {namespace}
+'''
+    
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(header_content)
+    
+    print(f"类别头文件已保存到: {output_path} (类别数: {num_categories})")
+    return True
+
 def convert_tokenizer_to_json(pkl_path, output_path):
     """转换tokenizer pkl到JSON"""
     with open(pkl_path, 'rb') as f:
@@ -385,10 +746,24 @@ def main():
                                'TextVocabCompact', 'Vocab')
     
     # 生成C++头文件（JSON数据）
-    create_cpp_header('config.json', 'model_config.h', 'ModelConfig')
+    create_cpp_header('config.json', 'model_config_json.h', 'ModelConfig')
     create_cpp_header('categories.json', 'categories_data.h', 'CategoriesData')
     create_cpp_header('filename_tokenizer.json', 'filename_tokenizer_data.h', 'FilenameTokenizer')
     create_cpp_header('text_tokenizer.json', 'text_tokenizer_data.h', 'TextTokenizer')
+    
+    # ========== 新增：生成非JSON格式的C++头文件 ==========
+    
+    # 生成C++配置头文件（直接使用结构体，无需JSON解析）
+    create_config_header('config_optimized.pkl', 'model_config.h', 'ModelConfig', 'Config')
+    
+    # 生成C++类别头文件
+    create_categories_header('categories.json', 'categories.h', 'Categories', 'Categories')
+    
+    # 生成Tokenizer配置头文件
+    create_tokenizer_config_header('filename_tokenizer.json', 'filename_tokenizer_config.h', 
+                                   'FilenameTokenizer', 'Tokenizer')
+    create_tokenizer_config_header('text_tokenizer.json', 'text_tokenizer_config.h', 
+                                   'TextTokenizer', 'Tokenizer')
     
     print("\n" + "="*60)
     print("转换完成！生成的文件：")
@@ -407,11 +782,16 @@ def main():
     print("\n📦 紧凑型哈希头文件（节省内存）：")
     print("  - filename_vocab_compact.h")
     print("  - text_vocab_compact.h")
-    print("\n📋 C++ JSON数据头文件：")
-    print("  - model_config.h")
+    print("\n📋 C++ JSON数据头文件（包含JSON字符串）：")
+    print("  - model_config_json.h")
     print("  - categories_data.h")
     print("  - filename_tokenizer_data.h")
     print("  - text_tokenizer_data.h")
+    print("\n📋 C++ 原生配置头文件（无需JSON解析，直接使用）：")
+    print("  - model_config.h        ← 模型配置结构体")
+    print("  - categories.h          ← 类别映射")
+    print("  - filename_tokenizer_config.h  ← 文件名分词器配置")
+    print("  - text_tokenizer_config.h      ← 文本分词器配置")
     print("="*60)
     print(f"\n⚠️  所有词汇表已截断至 {MAX_VOCAB_SIZE} 个词条")
 

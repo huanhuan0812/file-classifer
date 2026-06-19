@@ -8,3 +8,15 @@ models/*.onnx
 models/*.bin
 models/*.json
 models/predict_onnx.py
+
+build/
+.cache/
+
+.venv/
+
+*.pptx
+**/__pycache__/
+predict_onnx.py
+file_classifier
+
+test/
