@@ -10,12 +10,8 @@
 #include <vector>
 #include <filesystem>
 #include <fstream>
-#include <sstream>
 #include <iomanip>
 #include <algorithm>
-
-// 移除 cpu_provider_factory.h，因为 ONNX Runtime 已包含
-// #include <cpu_provider_factory.h>  // 删除此行
 
 const int MAX_TEXT_WORDS = 1000;
 const int MAX_FILENAME_WORDS = 32;
@@ -98,8 +94,9 @@ int main() {
     );
 
     std::vector<std::string> words = text_segmenter.cutWords(text);
-    std::cout << "提取的文本分词结果:" << std::endl;
-    std::cout << "词数: " << words.size() << std::endl;
+    // 注释掉调试输出
+    // std::cout << "提取的文本分词结果:" << std::endl;
+    // std::cout << "词数: " << words.size() << std::endl;
 
     // 5. 文本转索引
     Vocab::TextVocab text_vocab;
@@ -117,7 +114,7 @@ int main() {
         }
         text_hashes.push_back(hash);
     }
-    std::cout << "文本索引完成" << std::endl;
+    // std::cout << "文本索引完成" << std::endl;
 
     // 6. 文件名处理
     std::filesystem::path p(filepath);
@@ -139,45 +136,45 @@ int main() {
         }
         filename_hashes.push_back(hash);
     }
-    std::cout << "文件名索引完成" << std::endl;
+    // std::cout << "文件名索引完成" << std::endl;
 
     // ============ 7. ONNX Runtime 推理 ============
-    std::cout << "\n正在加载ONNX模型..." << std::endl;
+    // std::cout << "\n正在加载ONNX模型..." << std::endl;
 
     try {
         Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "file_classifier");
         Ort::SessionOptions session_options;
         session_options.SetIntraOpNumThreads(1);
         session_options.SetGraphOptimizationLevel(
-            GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+            GraphOptimizationLevel::ORT_ENABLE_ALL);  // 改为 ALL 优化
         
-        // 设置CPU执行提供者（直接调用，不包装）
+        // 设置CPU执行提供者
         OrtSessionOptionsAppendExecutionProvider_CPU(session_options, 0);
         
         const char* model_path = "./textcnn_classifier.onnx";
         Ort::Session session(env, model_path, session_options);
 
         // ============================================================
-        // 【核心修复】直接使用已知的名称，避免动态获取可能的问题
+        // 直接使用已知的名称，避免动态获取
         // ============================================================
         std::vector<const char*> input_names = {"text_input", "filename_input"};
         std::vector<const char*> output_names = {"output"};
         
-        // 可选：验证名称是否匹配（仅用于调试）
-        Ort::AllocatorWithDefaultOptions allocator;
-        size_t num_inputs = session.GetInputCount();
-        size_t num_outputs = session.GetOutputCount();
-        std::cout << "模型输入数量: " << num_inputs << std::endl;
-        std::cout << "模型输出数量: " << num_outputs << std::endl;
-        
-        for (size_t i = 0; i < num_inputs; ++i) {
-            auto name = session.GetInputNameAllocated(i, allocator);
-            std::cout << "输入 " << i << ": '" << name.get() << "'" << std::endl;
-        }
-        for (size_t i = 0; i < num_outputs; ++i) {
-            auto name = session.GetOutputNameAllocated(i, allocator);
-            std::cout << "输出 " << i << ": '" << name.get() << "'" << std::endl;
-        }
+        // 注释掉调试信息获取
+        // Ort::AllocatorWithDefaultOptions allocator;
+        // size_t num_inputs = session.GetInputCount();
+        // size_t num_outputs = session.GetOutputCount();
+        // std::cout << "模型输入数量: " << num_inputs << std::endl;
+        // std::cout << "模型输出数量: " << num_outputs << std::endl;
+        // 
+        // for (size_t i = 0; i < num_inputs; ++i) {
+        //     auto name = session.GetInputNameAllocated(i, allocator);
+        //     std::cout << "输入 " << i << ": '" << name.get() << "'" << std::endl;
+        // }
+        // for (size_t i = 0; i < num_outputs; ++i) {
+        //     auto name = session.GetOutputNameAllocated(i, allocator);
+        //     std::cout << "输出 " << i << ": '" << name.get() << "'" << std::endl;
+        // }
 
         // 创建内存信息
         Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(
@@ -209,29 +206,29 @@ int main() {
         input_tensors.push_back(std::move(filename_tensor));
         
         // 执行推理
-        std::cout << "\n开始推理..." << std::endl;
+        // std::cout << "\n开始推理..." << std::endl;
         
         Ort::RunOptions run_options;
         run_options.SetRunLogVerbosityLevel(0);
         run_options.SetRunTag("inference");
         
-        // 打印调试信息
-        std::cout << "输入名称数组: ";
-        for (auto name : input_names) std::cout << name << " ";
-        std::cout << std::endl;
-        std::cout << "输出名称数组: ";
-        for (auto name : output_names) std::cout << name << " ";
-        std::cout << std::endl;
-        std::cout << "输入张量数量: " << input_tensors.size() << std::endl;
+        // 注释掉调试信息
+        // std::cout << "输入名称数组: ";
+        // for (auto name : input_names) std::cout << name << " ";
+        // std::cout << std::endl;
+        // std::cout << "输出名称数组: ";
+        // for (auto name : output_names) std::cout << name << " ";
+        // std::cout << std::endl;
+        // std::cout << "输入张量数量: " << input_tensors.size() << std::endl;
         
         // 执行推理
         auto output_tensors = session.Run(
             run_options,
-            input_names.data(),      // 输入名称
-            input_tensors.data(),    // 输入张量
-            input_tensors.size(),    // 输入数量
-            output_names.data(),     // 输出名称
-            output_names.size()      // 输出数量
+            input_names.data(),
+            input_tensors.data(),
+            input_tensors.size(),
+            output_names.data(),
+            output_names.size()
         );
         
         // 获取输出
@@ -242,22 +239,23 @@ int main() {
         
         auto& output_tensor = output_tensors[0];
         auto output_shape = output_tensor.GetTensorTypeAndShapeInfo().GetShape();
-        std::cout << "输出形状: ";
-        for (auto dim : output_shape) std::cout << dim << " ";
-        std::cout << std::endl;
+        // 注释掉输出形状信息
+        // std::cout << "输出形状: ";
+        // for (auto dim : output_shape) std::cout << dim << " ";
+        // std::cout << std::endl;
         
         float* output_data = output_tensor.GetTensorMutableData<float>();
         size_t output_size = output_tensor.GetTensorTypeAndShapeInfo().GetElementCount();
-        std::cout << "输出大小: " << output_size << std::endl;
+        // std::cout << "输出大小: " << output_size << std::endl;
         
         std::vector<float> probabilities(output_data, output_data + output_size);
         
-        // 打印原始输出（前10个）
-        std::cout << "原始输出: ";
-        for (size_t i = 0; i < std::min(size_t(10), output_size); ++i) {
-            std::cout << probabilities[i] << " ";
-        }
-        std::cout << std::endl;
+        // 注释掉原始输出
+        // std::cout << "原始输出: ";
+        // for (size_t i = 0; i < std::min(size_t(10), output_size); ++i) {
+        //     std::cout << probabilities[i] << " ";
+        // }
+        // std::cout << std::endl;
         
         // 找到预测类别
         int pred_idx = 0;
@@ -269,17 +267,12 @@ int main() {
             }
         }
         
-        // 加载类别
-        // std::vector<std::string> categories = loadCategories("categories.pkl.txt");
-        // if (categories.empty()) {
-        //     categories = {"语文", "数学", "英语", "物理", "化学", "生物", "班会"};
-        // }
-
         // 打印结果
         std::cout << "\n" << std::string(50, '=') << std::endl;
         std::cout << "文件: " << filepath << std::endl;
         std::cout << std::string(50, '=') << std::endl;
-        std::cout << "📝 文本长度: " << words.size() << " 词" << std::endl;
+        // 注释掉文本长度
+        // std::cout << "📝 文本长度: " << words.size() << " 词" << std::endl;
         
         std::string pred_class = (pred_idx < Config::ModelConfig::CATEGORIES.size()) ? 
                                  Config::ModelConfig::CATEGORIES[pred_idx] : "未知";

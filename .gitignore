@@ -20,3 +20,5 @@ predict_onnx.py
 file_classifier
 
 test/
+
+src/main_test.cpp
