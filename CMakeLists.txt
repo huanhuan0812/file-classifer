@@ -159,7 +159,11 @@ set(SOURCES
 set(HEADERS
     src/python_extractor.h
     src/text_processor.h
+    src/classifier.h
+    src/run_config.h
 )
+
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/yaml)
 
 # ========== 主程序 ==========
 add_executable(file_classifier ${SOURCES} ${HEADERS})
