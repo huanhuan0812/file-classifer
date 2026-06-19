@@ -101,6 +101,7 @@ int main() {
     // 5. 文本转索引
     Vocab::TextVocab text_vocab;
     std::vector<int32_t> text_hashes;
+    text_hashes.reserve(MAX_TEXT_WORDS);
     int32_t hash;
 
     for (int i = 0; i < MAX_TEXT_WORDS; ++i) {
@@ -125,6 +126,7 @@ int main() {
 
     Vocab::FilenameVocab filename_vocab;
     std::vector<int32_t> filename_hashes;
+    filename_hashes.reserve(MAX_FILENAME_WORDS);
     for (int i = 0; i < MAX_FILENAME_WORDS; ++i) {
         if (i >= filename_words.size()) {
             hash = 0;
