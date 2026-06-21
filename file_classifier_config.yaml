@@ -1,0 +1,68 @@
+# ==================== 路径配置 ====================
+paths:
+  source_dir: "D:/Backup/桌面"
+  target_base_dir: "D:/Backup/桌面/课件"
+
+# ==================== 分类预测 ====================
+prediction:
+  threshold: 0.98                        # 置信度阈值
+  supported_formats:                     # 支持的文件格式
+    - ".pptx"
+    - ".docx"
+
+# ==================== 文件处理 ====================
+file_handling:
+  mode: "move"                           # move / copy
+  create_category_dirs: true
+  keep_original_name: true
+  conflict_resolution: "skip"            # skip / rename / overwrite
+  low_confidence_action: "ignore"        # ignore / move_to_uncertain
+  uncertain_folder_name: "_uncertain_low_confidence"
+  
+  # 文件过滤（统一管理）
+  filters:
+    max_file_size_mb: 0                  # 0=无限制
+    skip_empty_text: false
+    skip_temp_files: true                # 跳过 ~$ 开头的临时文件
+    recursive_scan: false
+
+# ==================== 临时文件清理 ====================
+temp_file_cleanup:
+  enabled: true
+  action: "delete"                       # delete / move
+  target_dir: "./temp_cleanup"
+  patterns:                              # 要清理的文件模式
+    - "~$*"
+    - "*.tmp"
+    - "*~"
+    - "*.swp"
+    - "*.DS_Store"
+  min_file_age_minutes: 0
+  clean_on_start: true
+  clean_on_end: true
+
+# ==================== 重复文件处理 ====================
+duplicate_handling:
+  enabled: true
+  action: "delete"                       # delete / skip / keep_both
+  check_by_hash: true
+  hash_algorithm: "md5"                  # md5 / sha1 / sha256
+  scan_all_files: true
+  delete_source_duplicate: true
+
+# ==================== 日志配置 ====================
+logging:
+  enabled: true
+  level: "INFO"                          # DEBUG / INFO / WARNING / ERROR
+  output_dir: "./logs"                   # 🆕 统一日志目录
+  files:
+    main_log: "file_mover.log"
+    moved_list: "moved_files.csv"
+    cleanup_list: "cleaned_files.csv"
+    duplicate_list: "duplicate_files.csv"
+
+# ==================== 调试模式 ====================
+debug:
+  enabled: false
+  dry_run: false                         # 🆕 全局试运行模式
+  verbose: false                         # 🆕 替代 prediction.verbose
