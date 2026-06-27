@@ -1,3 +1,4 @@
+// python_extractor.h
 #pragma once
 
 #include <Python.h>
@@ -57,12 +58,18 @@ public:
      * 获取最后的错误信息
      */
     std::string getLastError() const { return m_lastError; }
+    
+    /**
+     * 获取详细的初始化错误信息
+     */
+    std::string getInitError() const { return m_initError; }
 
 private:
     PyObject* m_pModule;        // extract 模块对象
     PyObject* m_pFunc;          // extract_text_from_file 函数对象
     bool m_initialized;         // 初始化状态
     std::string m_lastError;    // 最后的错误信息
+    std::string m_initError;    // 初始化错误信息
     std::string m_scriptDir;    // extract.py 所在目录
     
     /**
@@ -79,4 +86,9 @@ private:
      * 设置错误信息
      */
     void setError(const std::string& error);
+    
+    /**
+     * 设置初始化错误信息
+     */
+    void setInitError(const std::string& error);
 };

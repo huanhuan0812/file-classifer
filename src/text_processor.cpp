@@ -1,9 +1,11 @@
+// text_processor.cpp
 #include "text_processor.h"
 #include <unicode/utypes.h>
 #include <unicode/unistr.h>
 #include <unicode/regex.h>
 #include <unicode/stringpiece.h>
 #include <sstream>
+#include <iostream>
 
 namespace TextProcessor {
 
@@ -133,13 +135,36 @@ TextSegmenter::TextSegmenter(
     const std::string& idf_path,
     const std::string& stop_word_path
 ) {
+    // 检查所有词典文件是否存在
+    std::vector<std::pair<std::string, std::string>> files = {
+        {"jieba.dict.utf8", dict_path},
+        {"hmm_model.utf8", hmm_path},
+        {"user.dict.utf8", user_dict_path},
+        {"idf.utf8", idf_path},
+        {"stop_words.utf8", stop_word_path}
+    };
+    
+    for (const auto& [name, path] : files) {
+        std::ifstream file(path);
+        if (!file.is_open()) {
+            init_error_ = "词典文件不存在: " + path + " (" + name + ")";
+            initialized_ = false;
+            std::cerr << "TextSegmenter 错误: " << init_error_ << std::endl;
+            return;
+        }
+    }
+    
     try {
         jieba_ = std::make_unique<cppjieba::Jieba>(
             dict_path, hmm_path, user_dict_path, idf_path, stop_word_path
         );
+        initialized_ = true;
     } catch (const std::exception& e) {
-        std::cerr << "Error initializing Jieba: " << e.what() << std::endl;
+        init_error_ = "Jieba 初始化失败: " + std::string(e.what());
+        initialized_ = false;
+        std::cerr << "TextSegmenter 错误: " << init_error_ << std::endl;
         jieba_ = nullptr;
+        return;
     }
     
     initStopwords();
@@ -246,12 +271,6 @@ std::string TextSegmenter::processText(const std::string& text, bool use_hmm) {
 
 FilenameSegmenter::FilenameSegmenter(TextSegmenter* text_segmenter)
     : text_segmenter_(text_segmenter) {
-    // 引用TextSegmenter中的停用词表和有意义单字表
-    if (text_segmenter_ != nullptr) {
-        // 注意：这里使用引用，避免拷贝
-        // 但由于C++不能直接存储引用成员，我们使用指针方式
-        // 在filterStopwordsForFilename中直接访问text_segmenter_->getStopwords()
-    }
 }
 
 std::string FilenameSegmenter::trim(const std::string& str) {
@@ -264,8 +283,8 @@ std::string FilenameSegmenter::trim(const std::string& str) {
 }
 
 std::vector<std::string> FilenameSegmenter::filterStopwordsForFilename(const std::vector<std::string>& words) {
-    if (text_segmenter_ == nullptr) {
-        return words;  // 如果segmenter不可用，返回原始结果
+    if (text_segmenter_ == nullptr || !text_segmenter_->isReady()) {
+        return words;
     }
     
     const auto& stopwords = text_segmenter_->getStopwords();

@@ -1,8 +1,10 @@
+// text_processor.h
 #pragma once
 #include <string>
 #include <vector>
 #include <set>
 #include <memory>
+#include <fstream>
 #include "cppjieba/Jieba.hpp"
 
 namespace TextProcessor {
@@ -65,12 +67,19 @@ namespace TextProcessor {
         /**
          * 检查分词器是否初始化成功
          */
-        bool isReady() const { return jieba_ != nullptr; }
+        bool isReady() const { return jieba_ != nullptr && initialized_; }
+        
+        /**
+         * 获取初始化错误信息
+         */
+        std::string getInitError() const { return init_error_; }
         
     private:
         std::unique_ptr<cppjieba::Jieba> jieba_;
         std::set<std::string> stopwords_;
         std::set<std::string> meaningful_single_chars_;
+        bool initialized_ = false;
+        std::string init_error_;
         
         void initStopwords();
         void initMeaningfulSingleChars();
@@ -104,8 +113,6 @@ namespace TextProcessor {
         
     private:
         TextSegmenter* text_segmenter_;  // 共用jieba实例
-        std::set<std::string> stopwords_;  // 引用停用词表
-        std::set<std::string> meaningful_single_chars_;  // 引用有意义单字表
         
         std::string trim(const std::string& str);
         std::vector<std::string> filterStopwordsForFilename(const std::vector<std::string>& words);

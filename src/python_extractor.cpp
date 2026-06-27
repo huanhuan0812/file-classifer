@@ -1,3 +1,4 @@
+// python_extractor.cpp
 #include "python_extractor.h"
 #include <iostream>
 #include <cstring>
@@ -11,6 +12,7 @@ PythonTextExtractor::PythonTextExtractor(const std::string& python_script_dir)
     : m_pModule(nullptr)
     , m_pFunc(nullptr)
     , m_initialized(false)
+    , m_initError("")
     , m_scriptDir(python_script_dir)
 {
     m_initialized = initPython();
@@ -27,6 +29,12 @@ void PythonTextExtractor::setError(const std::string& error)
     std::cerr << "PythonTextExtractor 错误: " << error << std::endl;
 }
 
+void PythonTextExtractor::setInitError(const std::string& error)
+{
+    m_initError = error;
+    setError(error);
+}
+
 bool PythonTextExtractor::initPython()
 {
     // 如果已经初始化过，直接返回
@@ -41,17 +49,18 @@ bool PythonTextExtractor::initPython()
         if (m_pModule) {
             m_pFunc = PyObject_GetAttrString(m_pModule, "extract_text_from_file");
             if (m_pFunc && PyCallable_Check(m_pFunc)) {
+                m_initError = "";
                 return true;
             }
         }
-        setError("无法重新获取 extract 模块");
+        setInitError("无法重新获取 extract 模块");
         return false;
     }
     
     // 初始化 Python 解释器
     Py_Initialize();
     if (!Py_IsInitialized()) {
-        setError("Python 初始化失败");
+        setInitError("Python 解释器初始化失败");
         return false;
     }
     
@@ -59,19 +68,25 @@ bool PythonTextExtractor::initPython()
     
     // 添加 Python 脚本目录到 sys.path
     std::string addPathCmd = "import sys; sys.path.append('" + m_scriptDir + "')";
-    PyRun_SimpleString("import sys");
-    PyRun_SimpleString(addPathCmd.c_str());
+    int ret = PyRun_SimpleString("import sys");
+    if (ret != 0) {
+        setInitError("无法导入 sys 模块");
+        return false;
+    }
+    
+    ret = PyRun_SimpleString(addPathCmd.c_str());
+    if (ret != 0) {
+        setInitError("无法添加 Python 脚本目录到 sys.path: " + m_scriptDir);
+        return false;
+    }
     
     // 也添加当前目录作为备选
     PyRun_SimpleString("sys.path.append('.')");
     
-    // 调试：打印 sys.path
-    // PyRun_SimpleString("print('sys.path:', sys.path)");
-    
     // 导入 extract 模块
     PyObject* pModuleName = PyUnicode_FromString("extract");
     if (!pModuleName) {
-        setError("无法创建模块名");
+        setInitError("无法创建模块名");
         return false;
     }
     
@@ -79,21 +94,43 @@ bool PythonTextExtractor::initPython()
     Py_DECREF(pModuleName);
     
     if (!m_pModule) {
-        setError("无法导入 extract 模块，请确保 " + m_scriptDir + "/extract.py 存在");
-        PyErr_Print();
+        // 获取详细的 Python 错误信息
+        if (PyErr_Occurred()) {
+            PyErr_Print();
+            PyObject *ptype, *pvalue, *ptraceback;
+            PyErr_Fetch(&ptype, &pvalue, &ptraceback);
+            if (pvalue) {
+                PyObject* str = PyObject_Str(pvalue);
+                if (str) {
+                    const char* error_msg = PyUnicode_AsUTF8(str);
+                    setInitError("无法导入 extract 模块: " + std::string(error_msg) + 
+                                "\n请确保 " + m_scriptDir + "/extract.py 存在且语法正确");
+                    Py_DECREF(str);
+                }
+                Py_DECREF(pvalue);
+            }
+            if (ptype) Py_DECREF(ptype);
+            if (ptraceback) Py_DECREF(ptraceback);
+        } else {
+            setInitError("无法导入 extract 模块，请确保 " + m_scriptDir + "/extract.py 存在");
+        }
         return false;
     }
     
     // 获取 extract_text_from_file 函数
     m_pFunc = PyObject_GetAttrString(m_pModule, "extract_text_from_file");
     if (!m_pFunc || !PyCallable_Check(m_pFunc)) {
-        setError("无法获取 extract_text_from_file 函数");
-        PyErr_Print();
+        if (m_pFunc) {
+            Py_DECREF(m_pFunc);
+            m_pFunc = nullptr;
+        }
+        setInitError("无法获取 extract_text_from_file 函数，请检查 extract.py 中是否定义了该函数");
         Py_DECREF(m_pModule);
         m_pModule = nullptr;
         return false;
     }
     
+    m_initError = "";
     return true;
 }
 
@@ -109,10 +146,6 @@ void PythonTextExtractor::cleanupPython()
         Py_DECREF(m_pModule);
         m_pModule = nullptr;
     }
-    
-    // 注意: 不要在析构函数中调用 Py_Finalize()
-    // 因为其他实例可能还在使用 Python
-    // 如果需要，可以在程序退出时调用 Py_Finalize()
 }
 
 std::string PythonTextExtractor::extractText(const std::string& filepath, bool extract_embedded)
