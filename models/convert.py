@@ -178,7 +178,7 @@ struct {struct_name} {{
 
 // ==================== 静态成员定义 ====================
 
-const std::vector<std::string> {struct_name}::CATEGORIES = {{
+const inline std::vector<std::string> {struct_name}::CATEGORIES = {{
 '''
     
     # 添加类别列表
